@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Study Focus Clock & Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,600;1,400&display=swap');
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0d0f12;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+    .font-mono-custom { font-family: 'JetBrains Mono', monospace; }
+    .font-serif-custom { font-family: 'Playfair Display', serif; }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #13171f; }
+    ::-webkit-scrollbar-thumb { background: #2a3447; border-radius: 4px; }
+
+    /* Focus Mode UI Hiding */
+    .focus-hide {
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+    body.is-focused .focus-hide {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-10px);
+    }
+
+    /* Ambient Glow for Desk Clock */
+    .ambient-glow {
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(99,102,241,0.25) 0%, rgba(168,85,247,0.15) 40%, rgba(0,0,0,0) 70%);
+      filter: blur(40px);
+      border-radius: 50%;
+      z-index: 0;
+      animation: pulse-glow 8s infinite alternate ease-in-out;
+    }
+    @keyframes pulse-glow {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      100% { transform: scale(1.15); opacity: 0.9; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="focus-hide border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
+        <i class="fa-solid fa-stopwatch text-sm"></i>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold text-slate-100 tracking-wide">学習記録アプリ「モチベート」</h1>
+        <p class="text-[10px] text-slate-400">Study Focus & Tracker</p>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs font-medium">
+      <button onclick="switchTab('clock')" id="tab-clock" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-clock"></i> <span class="hidden sm:inline">時計</span>
+      </button>
+      <button onclick="switchTab('timer')" id="tab-timer" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-hourglass-half"></i> <span class="hidden sm:inline">タイマー/記録</span>
+      </button>
+      <button onclick="switchTab('targets')" id="tab-targets" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-bullseye"></i> <span class="hidden sm:inline">目標管理</span>
+      </button>
+      <button onclick="switchTab('logs')" id="tab-logs" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-chart-pie"></i> <span class="hidden sm:inline">分析・ログ</span>
+      </button>
+    </nav>
+
+    <!-- Controls -->
+    <div class="flex items-center gap-2">
+      <button onclick="toggleFocusMode()" class="p-2 text-slate-400 hover:text-indigo-400 bg-slate-900 border border-slate-800 rounded-lg text-xs flex items-center gap-1" title="全画面時計モード">
+        <i class="fa-solid fa-expand"></i>
+      </button>
+      <button onclick="openSyncModal()" class="p-2 text-slate-400 hover:text-indigo-400 bg-slate-900 border border-slate-800 rounded-lg text-xs" title="データ同期・バックアップ">
+        <i class="fa-solid fa-rotate"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center">
+
+    <!-- 1. CLOCK VIEW -->
+    <section id="view-clock" class="space-y-6">
+      <!-- Style Selector Bar -->
+      <div class="focus-hide flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 border border-slate-800 p-3 rounded-2xl">
+        <span class="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+          <i class="fa-solid fa-palette text-indigo-400"></i> 時計デザイン (全5種)
+        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="setClockStyle(1)" class="clock-btn border border-slate-700 px-3 py-1 text-xs rounded-lg text-slate-300 hover:bg-slate-800" id="clock-btn-1">1. デジタル</button>
+          <button onclick="setClockStyle(2)" class="clock-btn border border-slate-700 px-3 py-1 text-xs rounded-lg text-slate-300 hover:bg-slate-800" id="clock-btn-2">2. アナログ</button>
+          <button onclick="setClockStyle(3)" class="clock-btn border border-slate-700 px-3 py-1 text-xs rounded-lg text-slate-300 hover:bg-slate-800" id="clock-btn-3">3. サイバー</button>
+          <button onclick="setClockStyle(4)" class="clock-btn border border-slate-700 px-3 py-1 text-xs rounded-lg text-slate-300 hover:bg-slate-800" id="clock-btn-4">4. ミニマルリング</button>
+          <button onclick="setClockStyle(5)" class="clock-btn border border-slate-700 px-3 py-1 text-xs rounded-lg text-slate-300 hover:bg-slate-800 font-semibold text-indigo-400 border-indigo-500/50" id="clock-btn-5">5. デスク特化 (お洒落)</button>
+        </div>
+      </div>
+
+      <!-- Clock Stage -->
+      <div onclick="toggleFocusMode()" class="relative cursor-pointer min-h-[380px] sm:min-h-[440px] flex items-center justify-center bg-slate-950/40 border border-slate-900 rounded-3xl p-6 overflow-hidden select-none group">
+        <div class="focus-hide absolute top-4 right-4 text-[11px] text-slate-500 group-hover:text-slate-300 transition flex items-center gap-1">
+          <i class="fa-solid fa-up-right-and-down-left-from-center"></i> クリックで全画面時計表示
+        </div>
+
+        <!-- Style 1 -->
+        <div id="clock-style-1" class="clock-panel hidden flex-col items-center justify-center text-center">
+          <div id="dig-time-1" class="font-mono-custom text-6xl sm:text-8xl font-bold tracking-tight text-white">00:00:00</div>
+          <div id="dig-date-1" class="text-sm sm:text-base text-slate-400 mt-4 tracking-widest uppercase">2026.10.17 SAT</div>
+        </div>
+
+        <!-- Style 2 -->
+        <div id="clock-style-2" class="clock-panel hidden flex-col items-center justify-center py-4">
+          <div class="relative w-64 h-64 sm:w-72 sm:h-72 border-4 border-slate-800 rounded-full flex items-center justify-center bg-slate-900/80 shadow-2xl">
+            <span class="absolute top-2 text-xs font-mono font-bold text-slate-400">12</span>
+            <span class="absolute right-3 text-xs font-mono font-bold text-slate-400">3</span>
+            <span class="absolute bottom-2 text-xs font-mono font-bold text-slate-400">6</span>
+            <span class="absolute left-3 text-xs font-mono font-bold text-slate-400">9</span>
+            <div class="w-3 h-3 bg-indigo-500 rounded-full z-20"></div>
+            <div id="analog-hour" class="absolute w-1.5 h-16 bg-slate-200 top-1/2 left-1/2 -translate-x-1/2 origin-top rounded-full transition-transform"></div>
+            <div id="analog-min" class="absolute w-1 h-24 bg-slate-400 top-1/2 left-1/2 -translate-x-1/2 origin-top rounded-full transition-transform"></div>
+            <div id="analog-sec" class="absolute w-0.5 h-28 bg-indigo-500 top-1/2 left-1/2 -translate-x-1/2 origin-top rounded-full transition-transform"></div>
+          </div>
+          <div id="dig-date-2" class="text-xs text-slate-400 mt-6 tracking-wider font-mono">2026/10/17 (SAT)</div>
+        </div>
+
+        <!-- Style 3 -->
+        <div id="clock-style-3" class="clock-panel hidden flex-col items-center justify-center p-8 bg-black/80 border border-emerald-500/30 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+          <div class="text-[10px] text-emerald-500 font-mono tracking-widest uppercase mb-2">SYSTEM TIME // LIVE</div>
+          <div id="dig-time-3" class="font-mono-custom text-5xl sm:text-7xl font-bold text-emerald-400 tracking-wider">00:00:00</div>
+          <div id="dig-date-3" class="font-mono text-xs text-emerald-600 mt-4">2026-10-17 RELEASE_MODE</div>
+        </div>
+
+        <!-- Style 4 -->
+        <div id="clock-style-4" class="clock-panel hidden relative flex-col items-center justify-center">
+          <svg class="w-64 h-64 sm:w-72 sm:h-72 -rotate-90">
+            <circle cx="50%" cy="50%" r="42%" class="stroke-slate-800 fill-none" stroke-width="6"></circle>
+            <circle id="ring-sec-circle" cx="50%" cy="50%" r="42%" class="stroke-indigo-500 fill-none transition-all duration-300" stroke-width="6" stroke-dasharray="700" stroke-dashoffset="0" stroke-linecap="round"></circle>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <div id="dig-time-4" class="font-mono-custom text-4xl sm:text-5xl font-bold text-slate-100">00:00</div>
+            <div id="dig-sec-4" class="text-xs text-indigo-400 font-mono mt-1">:00</div>
+          </div>
+        </div>
+
+        <!-- Style 5 -->
+        <div id="clock-style-5" class="clock-panel flex flex-col items-center justify-center text-center relative z-10 py-6">
+          <div class="ambient-glow"></div>
+          <div class="relative z-10 flex flex-col items-center">
+            <div id="desk-day" class="font-serif-custom italic text-xl sm:text-2xl text-indigo-300/90 tracking-wide mb-1">Saturday</div>
+            <div id="desk-time" class="font-mono-custom text-6xl sm:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-white via-slate-100 to-slate-400 drop-shadow-2xl">00:00</div>
+            <div id="desk-sec" class="text-xs font-mono text-slate-500 tracking-widest mt-1">:00</div>
+            <div id="desk-date" class="text-xs sm:text-sm text-slate-400 font-medium tracking-widest uppercase mt-6 border-t border-slate-800/80 pt-3 px-6">October 17, 2026</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 2. TIMER & LOG INPUT VIEW -->
+    <section id="view-timer" class="space-y-6 hidden">
+      <!-- Input Mode Switcher (Timer vs Manual Input) -->
+      <div class="flex items-center justify-center gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl max-w-sm mx-auto">
+        <button onclick="setInputType('realtime')" id="type-btn-realtime" class="flex-1 py-2 text-xs font-bold rounded-xl text-white bg-indigo-600 transition">
+          <i class="fa-solid fa-stopwatch mr-1"></i> タイマー計測
+        </button>
+        <button onclick="setInputType('manual')" id="type-btn-manual" class="flex-1 py-2 text-xs font-bold rounded-xl text-slate-400 hover:text-slate-200 transition">
+          <i class="fa-solid fa-pen-to-square mr-1"></i> 手動で記録
+        </button>
+      </div>
+
+      <!-- A. REALTIME TIMER PANEL -->
+      <div id="panel-realtime-timer" class="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-6 relative overflow-hidden">
+        <!-- Live Mini Clock -->
+        <div class="absolute top-4 right-6 text-right">
+          <div class="text-[10px] text-slate-500">現在時刻</div>
+          <div id="mini-live-clock" class="font-mono text-xs text-slate-300 font-semibold">00:00:00</div>
+        </div>
+
+        <!-- Mode Toggle Switch (Stopwatch vs Timer) -->
+        <div class="flex items-center justify-center gap-2 bg-slate-950 border border-slate-800 p-1 rounded-xl max-w-xs mx-auto">
+          <button onclick="setTimerMode('stopwatch')" id="mode-btn-stopwatch" class="flex-1 py-1.5 text-[11px] font-bold rounded-lg text-white bg-slate-800 transition">
+            カウントアップ
+          </button>
+          <button onclick="setTimerMode('timer')" id="mode-btn-timer" class="flex-1 py-1.5 text-[11px] font-bold rounded-lg text-slate-400 transition">
+            カウントダウン
+          </button>
+        </div>
+
+        <!-- Target & Category Selector -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-lg mx-auto">
+          <div>
+            <label class="text-[11px] text-slate-400 font-medium mb-1 block"><i class="fa-solid fa-bullseye text-indigo-400"></i> 学習目的（目標）</label>
+            <select id="timer-target-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"></select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 font-medium mb-1 block"><i class="fa-solid fa-layer-group text-purple-400"></i> 勉強内容（区分）</label>
+            <select id="timer-category-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="過去問演習">過去問演習</option>
+              <option value="動画視聴">動画視聴（YouTube等）</option>
+              <option value="テキスト読解">テキスト読解</option>
+              <option value="単語・暗記">単語・暗記カード</option>
+              <option value="問題集解き直し">問題集解き直し</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Custom Duration Inputs -->
+        <div id="custom-timer-inputs" class="hidden flex items-center justify-center gap-2">
+          <span class="text-xs text-slate-400">集中時間:</span>
+          <input type="number" id="timer-input-min" value="25" min="1" max="180" class="w-16 bg-slate-950 border border-slate-800 rounded-lg text-center text-xs py-1 text-slate-200 focus:outline-none focus:border-indigo-500">
+          <span class="text-xs text-slate-400">分</span>
+          <button onclick="applyTimerPreset(25)" class="text-[11px] px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300">ポモドーロ (25分)</button>
+          <button onclick="applyTimerPreset(50)" class="text-[11px] px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300">50分</button>
+        </div>
+
+        <!-- Numbers Display -->
+        <div class="py-2">
+          <div id="main-timer-display" class="font-mono-custom text-6xl sm:text-7xl font-extrabold text-white tracking-tight">00:00:00</div>
+          <p id="timer-status-sub" class="text-xs text-slate-400 mt-2">ストップウォッチ準備完了</p>
+        </div>
+
+        <!-- Timer Controls -->
+        <div class="flex items-center justify-center gap-3">
+          <button id="btn-timer-start" onclick="toggleTimer()" class="w-32 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-indigo-500/20 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-play"></i> スタート
+          </button>
+          <button onclick="resetTimer()" class="w-24 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-semibold text-sm transition">
+            リセット
+          </button>
+          <button id="btn-timer-save" onclick="saveTimerLog()" disabled class="px-4 py-3 bg-emerald-600/50 text-slate-400 rounded-2xl font-semibold text-xs transition cursor-not-allowed flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk"></i> ログ保存
+          </button>
+        </div>
+      </div>
+
+      <!-- B. MANUAL LOG INPUT PANEL -->
+      <div id="panel-manual-input" class="hidden bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-5 max-w-lg mx-auto">
+        <div class="text-center border-b border-slate-800 pb-3">
+          <h3 class="text-sm font-bold text-slate-100"><i class="fa-solid fa-pen-to-square text-indigo-400"></i> 学習時間の手動直接入力</h3>
+          <p class="text-[11px] text-slate-400 mt-0.5">タイマーを回さなかった勉強もあとからまとめて記録できます</p>
+        </div>
+
+        <form onsubmit="handleManualLogSubmit(event)" class="space-y-4">
+          <div>
+            <label class="text-[11px] text-slate-400 font-medium mb-1 block">実施日時</label>
+            <input type="datetime-local" id="manual-date-input" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div>
+            <label class="text-[11px] text-slate-400 font-medium mb-1 block"><i class="fa-solid fa-bullseye text-indigo-400"></i> 学習目的（目標）</label>
+            <select id="manual-target-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"></select>
+          </div>
+
+          <div>
+            <label class="text-[11px] text-slate-400 font-medium mb-1 block"><i class="fa-solid fa-layer-group text-purple-400"></i> 勉強内容（区分）</label>
+            <select id="manual-category-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="動画視聴">動画視聴（YouTube等）</option>
+              <option value="過去問演習">過去問演習</option>
+              <option value="テキスト読解">テキスト読解</option>
+              <option value="単語・暗記">単語・暗記カード</option>
+              <option value="問題集解き直し">問題集解き直し</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-[11px] text-slate-400 font-medium mb-1 block">勉強した時間</label>
+            <div class="flex items-center gap-2">
+              <input type="number" id="manual-hours-input" min="0" max="24" value="1" class="w-20 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-center text-slate-200 focus:outline-none focus:border-indigo-500">
+              <span class="text-xs text-slate-400">時間</span>
+              <input type="number" id="manual-mins-input" min="0" max="59" value="0" class="w-20 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-center text-slate-200 focus:outline-none focus:border-indigo-500">
+              <span class="text-xs text-slate-400">分</span>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-indigo-500/20 transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-plus"></i> 手動ログを追加・保存
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 3. TARGETS MANAGEMENT VIEW -->
+    <section id="view-targets" class="space-y-6 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-slate-100">学習目的・目標の管理</h2>
+          <p class="text-xs text-slate-400">資格試験や目標ごとの目標時間・試験日を設定できます</p>
+        </div>
+        <button onclick="openTargetModal()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-plus"></i> 新規目標を追加
+        </button>
+      </div>
+
+      <div id="target-card-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </section>
+
+    <!-- 4. LOGS & ANALYTICS VIEW -->
+    <section id="view-logs" class="space-y-6 hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-100">学習分析 & ログ履歴</h2>
+          <p class="text-xs text-slate-400">これまでの学習積上げログと達成度グラフ</p>
+        </div>
+        
+        <!-- Period Filter Selector -->
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+          <button onclick="setLogPeriod('day')" id="period-btn-day" class="px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200 transition">日</button>
+          <button onclick="setLogPeriod('week')" id="period-btn-week" class="px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200 transition">週</button>
+          <button onclick="setLogPeriod('month')" id="period-btn-month" class="px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200 transition">月</button>
+          <button onclick="setLogPeriod('year')" id="period-btn-year" class="px-3 py-1 rounded-lg text-slate-400 hover:text-slate-200 transition">年</button>
+          <button onclick="setLogPeriod('all')" id="period-btn-all" class="px-3 py-1 rounded-lg bg-indigo-600 text-white transition">全期間</button>
+        </div>
+
+        <div id="overall-total-time" class="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-indigo-400 font-mono font-bold">
+          累計: 0時間 0分
+        </div>
+      </div>
+
+      <!-- VISUAL BAR CHART CONTAINER -->
+      <div id="bar-chart-card" class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            <i class="fa-solid fa-chart-column text-indigo-400"></i> 
+            学習量の推移グラフ (<span id="chart-period-title">直近</span>)
+          </h3>
+          <p id="motivational-badge" class="text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+            <i class="fa-solid fa-fire"></i> 継続は力なり！
+          </p>
+        </div>
+
+        <!-- Dynamic Bar Chart Display -->
+        <div id="visual-bar-chart" class="h-44 flex items-end justify-between gap-2 pt-6 pb-2 px-2 border-b border-slate-800">
+          <!-- Bars rendered dynamically via JS -->
+        </div>
+      </div>
+
+      <!-- CATEGORY BREAKDOWN -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <h3 class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+          <i class="fa-solid fa-chart-pie text-indigo-400"></i> 学習区分別の内訳
+        </h3>
+        <div id="category-breakdown-container" class="space-y-2"></div>
+      </div>
+
+      <!-- LOG HISTORY TABLE -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-300">学習履歴ログ (<span id="log-period-label">全期間</span>)</span>
+          <button onclick="clearAllLogs()" class="text-[11px] text-rose-400 hover:text-rose-300">全ログ消去</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-950/60 text-slate-400 uppercase text-[10px]">
+              <tr>
+                <th class="py-2.5 px-4">日時</th>
+                <th class="py-2.5 px-4">目的</th>
+                <th class="py-2.5 px-4">区分</th>
+                <th class="py-2.5 px-4">学習時間</th>
+                <th class="py-2.5 px-4 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body" class="divide-y divide-slate-800/60 text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ADD / EDIT TARGET -->
+  <div id="modal-target" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 id="modal-target-title-text" class="text-sm font-bold text-slate-100">学習目標の作成</h3>
+        <button onclick="closeTargetModal()" class="text-slate-500 hover:text-slate-300 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="target-form" onsubmit="handleTargetFormSubmit(event)" class="space-y-3">
+        <input type="hidden" id="target-edit-id" value="">
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">目標名（例: FP3級合格、TOEIC700点）</label>
+          <input type="text" id="target-name-input" required placeholder="FP3級" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">目標時間（時間単位）</label>
+          <input type="number" id="target-hours-input" required min="1" max="2000" placeholder="100" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">試験日 / 目標達成日（任意）</label>
+          <input type="date" id="target-date-input" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">テーマカラー</label>
+          <div class="flex items-center gap-2">
+            <input type="color" id="target-color-input" value="#6366f1" class="w-8 h-8 rounded bg-transparent border-0 cursor-pointer">
+            <span class="text-xs text-slate-400">カードのアクセントカラー</span>
+          </div>
+        </div>
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="closeTargetModal()" class="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-xl">キャンセル</button>
+          <button type="submit" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DATA SYNC / BACKUP -->
+  <div id="modal-sync" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-slate-100"><i class="fa-solid fa-rotate text-indigo-400"></i> PC ⇔ スマホ データ同期・引継ぎ</h3>
+        <button onclick="closeSyncModal()" class="text-slate-500 hover:text-slate-300 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        サーバーなしで動作するため、別端末にデータを移行したい場合は以下のテキスト（JSONデータ）をコピーして相手の端末で復元してください。
+      </p>
+      <div>
+        <label class="text-[11px] text-slate-400 block mb-1">バックアップ / 復元データ (JSON)</label>
+        <textarea id="sync-json-text" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-[10px] font-mono text-slate-300 focus:outline-none focus:border-indigo-500"></textarea>
+      </div>
+      <div class="flex items-center justify-between pt-1">
+        <button onclick="copySyncData()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-xl flex items-center gap-1">
+          <i class="fa-regular fa-copy"></i> コピー
+        </button>
+        <button onclick="importSyncData()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl">
+          この内容でデータ復元
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="focus-hide border-t border-slate-900 py-3 text-center text-[11px] text-slate-600">
+    <p>Study Focus Clock & Tracker &copy; Completely Local Privacy Protected</p>
+  </footer>
+
+  <!-- LOGIC -->
+  <script>
+    let appState = {
+      activeTab: 'clock',
+      clockStyle: 5,
+      timerMode: 'stopwatch',
+      inputType: 'realtime', // 'realtime' or 'manual'
+      logPeriod: 'day', // 'day', 'week', 'month', 'year', 'all'
+      targets: [
+        { id: 't1', name: 'FP3級', targetHours: 80, color: '#6366f1', examDate: '2027-01-24' },
+        { id: 't2', name: 'TOEIC', targetHours: 120, color: '#a855f7', examDate: '' }
+      ],
+      logs: []
+    };
+
+    let timerInterval = null;
+    let timerSeconds = 0;
+    let isTimerRunning = false;
+    let targetCountdownSec = 25 * 60;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadLocalStorage();
+      setupClockInterval();
+      renderTargets();
+      setLogPeriod(appState.logPeriod || 'day');
+      updateTimerDisplay();
+      populateTargetDropdowns();
+      setClockStyle(appState.clockStyle);
+      setDefaultManualDate();
+
+      document.addEventListener('mousemove', handleFocusUserActivity);
+      document.addEventListener('touchstart', handleFocusUserActivity);
+    });
+
+    function saveLocalStorage() {
+      localStorage.setItem('study_tracker_state_v3', JSON.stringify(appState));
+    }
+
+    function loadLocalStorage() {
+      const saved = localStorage.getItem('study_tracker_state_v3');
+      if (saved) {
+        try { appState = { ...appState, ...JSON.parse(saved) }; } catch (e) {}
+      }
+    }
+
+    function formatHoursMinutes(totalSeconds) {
+      const totalMinutes = Math.floor(totalSeconds / 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const mins = totalMinutes % 60;
+      if (hours > 0) {
+        return `${hours}時間 ${mins}分`;
+      }
+      return `${mins}分`;
+    }
+
+    function getDaysUntil(dateString) {
+      if (!dateString) return null;
+      const targetDate = new Date(dateString + 'T00:00:00');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function switchTab(tabName) {
+      appState.activeTab = tabName;
+      ['clock', 'timer', 'targets', 'logs'].forEach(t => {
+        const viewEl = document.getElementById(`view-${t}`);
+        const tabBtn = document.getElementById(`tab-${t}`);
+        if (t === tabName) {
+          viewEl.classList.remove('hidden');
+          tabBtn.classList.add('bg-indigo-600', 'text-white');
+          tabBtn.classList.remove('text-slate-400');
+        } else {
+          viewEl.classList.add('hidden');
+          tabBtn.classList.remove('bg-indigo-600', 'text-white');
+          tabBtn.classList.add('text-slate-400');
+        }
+      });
+    }
+
+    function setInputType(type) {
+      appState.inputType = type;
+      const realtimeBtn = document.getElementById('type-btn-realtime');
+      const manualBtn = document.getElementById('type-btn-manual');
+      const realtimePanel = document.getElementById('panel-realtime-timer');
+      const manualPanel = document.getElementById('panel-manual-input');
+
+      if (type === 'realtime') {
+        realtimeBtn.classList.add('bg-indigo-600', 'text-white');
+        realtimeBtn.classList.remove('text-slate-400');
+        manualBtn.classList.remove('bg-indigo-600', 'text-white');
+        manualBtn.classList.add('text-slate-400');
+        realtimePanel.classList.remove('hidden');
+        manualPanel.classList.add('hidden');
+      } else {
+        manualBtn.classList.add('bg-indigo-600', 'text-white');
+        manualBtn.classList.remove('text-slate-400');
+        realtimeBtn.classList.remove('bg-indigo-600', 'text-white');
+        realtimeBtn.classList.add('text-slate-400');
+        manualPanel.classList.remove('hidden');
+        realtimePanel.classList.add('hidden');
+      }
+    }
+
+    function setDefaultManualDate() {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      document.getElementById('manual-date-input').value = now.toISOString().slice(0, 16);
+    }
+
+    let focusTimeout = null;
+    function toggleFocusMode() {
+      document.body.classList.toggle('is-focused');
+    }
+    function handleFocusUserActivity() {
+      if (document.body.classList.contains('is-focused')) {
+        clearTimeout(focusTimeout);
+      }
+    }
+
+    function setClockStyle(styleNum) {
+      appState.clockStyle = styleNum;
+      saveLocalStorage();
+      document.querySelectorAll('.clock-panel').forEach(p => p.classList.add('hidden'));
+      document.getElementById(`clock-style-${styleNum}`).classList.remove('hidden');
+      document.querySelectorAll('.clock-btn').forEach(b => b.classList.remove('bg-indigo-600', 'text-white'));
+      const activeBtn = document.getElementById(`clock-btn-${styleNum}`);
+      if (activeBtn) activeBtn.classList.add('bg-indigo-600', 'text-white');
+    }
+
+    function setupClockInterval() {
+      setInterval(() => {
+        const now = new Date();
+        const hrs = String(now.getHours()).padStart(2, '0');
+        const mins = String(now.getMinutes()).padStart(2, '0');
+        const secs = String(now.getSeconds()).padStart(2, '0');
+        const timeStr = `${hrs}:${mins}:${secs}`;
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const date = String(now.getDate()).padStart(2, '0');
+        const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+        const miniClock = document.getElementById('mini-live-clock');
+        if (miniClock) miniClock.textContent = timeStr;
+
+        if (appState.clockStyle === 1) {
+          document.getElementById('dig-time-1').textContent = timeStr;
+          document.getElementById('dig-date-1').textContent = `${year}.${month}.${date} ${days[now.getDay()]}`;
+        } else if (appState.clockStyle === 2) {
+          document.getElementById('analog-sec').style.transform = `translate(-50%, 0) rotate(${now.getSeconds() * 6}deg)`;
+          document.getElementById('analog-min').style.transform = `translate(-50%, 0) rotate(${now.getMinutes() * 6 + now.getSeconds() * 0.1}deg)`;
+          document.getElementById('analog-hour').style.transform = `translate(-50%, 0) rotate(${(now.getHours() % 12) * 30 + now.getMinutes() * 0.5}deg)`;
+          document.getElementById('dig-date-2').textContent = `${year}/${month}/${date} (${days[now.getDay()]})`;
+        } else if (appState.clockStyle === 3) {
+          document.getElementById('dig-time-3').textContent = timeStr;
+          document.getElementById('dig-date-3').textContent = `${year}-${month}-${date} RELEASE_MODE`;
+        } else if (appState.clockStyle === 4) {
+          document.getElementById('dig-time-4').textContent = `${hrs}:${mins}`;
+          document.getElementById('dig-sec-4').textContent = `:${secs}`;
+          const circle = document.getElementById('ring-sec-circle');
+          const offset = 700 - (700 * (now.getSeconds() / 60));
+          circle.style.strokeDashoffset = offset;
+        } else if (appState.clockStyle === 5) {
+          const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const fullMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          document.getElementById('desk-day').textContent = fullDays[now.getDay()];
+          document.getElementById('desk-time').textContent = `${hrs}:${mins}`;
+          document.getElementById('desk-sec').textContent = `:${secs}`;
+          document.getElementById('desk-date').textContent = `${fullMonths[now.getMonth()]} ${now.getDate()}, ${year}`;
+        }
+      }, 1000);
+    }
+
+    function setTimerMode(mode) {
+      appState.timerMode = mode;
+      resetTimer();
+      const stopwatchBtn = document.getElementById('mode-btn-stopwatch');
+      const timerBtn = document.getElementById('mode-btn-timer');
+      const customInputs = document.getElementById('custom-timer-inputs');
+
+      if (mode === 'stopwatch') {
+        stopwatchBtn.classList.add('bg-slate-800', 'text-white');
+        stopwatchBtn.classList.remove('text-slate-400');
+        timerBtn.classList.remove('bg-slate-800', 'text-white');
+        timerBtn.classList.add('text-slate-400');
+        customInputs.classList.add('hidden');
+        document.getElementById('timer-status-sub').textContent = 'ストップウォッチ準備完了';
+      } else {
+        timerBtn.classList.add('bg-slate-800', 'text-white');
+        timerBtn.classList.remove('text-slate-400');
+        stopwatchBtn.classList.remove('bg-slate-800', 'text-white');
+        stopwatchBtn.classList.add('text-slate-400');
+        customInputs.classList.remove('hidden');
+        document.getElementById('timer-status-sub').textContent = 'カウントダウン準備完了';
+      }
+      updateTimerDisplay();
+    }
+
+    function applyTimerPreset(mins) {
+      document.getElementById('timer-input-min').value = mins;
+      resetTimer();
+    }
+
+    function toggleTimer() {
+      if (isTimerRunning) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    }
+
+    function startTimer() {
+      isTimerRunning = true;
+      const startBtn = document.getElementById('btn-timer-start');
+      startBtn.innerHTML = '<i class="fa-solid fa-pause"></i> 一時停止';
+      startBtn.classList.replace('bg-indigo-600', 'bg-amber-600');
+      startBtn.classList.replace('hover:bg-indigo-500', 'hover:bg-amber-500');
+
+      if (appState.timerMode === 'timer' && timerSeconds === 0) {
+        const inputMins = parseInt(document.getElementById('timer-input-min').value) || 25;
+        targetCountdownSec = inputMins * 60;
+        timerSeconds = targetCountdownSec;
+      }
+
+      timerInterval = setInterval(() => {
+        if (appState.timerMode === 'stopwatch') {
+          timerSeconds++;
+        } else {
+          if (timerSeconds > 0) {
+            timerSeconds--;
+          } else {
+            pauseTimer();
+            alert('タイマー終了時間です！お疲れ様でした。');
+          }
+        }
+        updateTimerDisplay();
+      }, 1000);
+
+      updateSaveButtonState();
+    }
+
+    function pauseTimer() {
+      isTimerRunning = false;
+      clearInterval(timerInterval);
+      const startBtn = document.getElementById('btn-timer-start');
+      startBtn.innerHTML = '<i class="fa-solid fa-play"></i> 再開';
+      startBtn.classList.replace('bg-amber-600', 'bg-indigo-600');
+      startBtn.classList.replace('hover:bg-amber-500', 'hover:bg-indigo-500');
+      updateSaveButtonState();
+    }
+
+    function resetTimer() {
+      pauseTimer();
+      const startBtn = document.getElementById('btn-timer-start');
+      startBtn.innerHTML = '<i class="fa-solid fa-play"></i> スタート';
+      timerSeconds = 0;
+      updateTimerDisplay();
+      updateSaveButtonState();
+    }
+
+    function updateTimerDisplay() {
+      let displaySec = timerSeconds;
+      if (appState.timerMode === 'timer' && timerSeconds === 0 && !isTimerRunning) {
+        const inputMins = parseInt(document.getElementById('timer-input-min').value) || 25;
+        displaySec = inputMins * 60;
+      }
+      const h = String(Math.floor(displaySec / 3600)).padStart(2, '0');
+      const m = String(Math.floor((displaySec % 3600) / 60)).padStart(2, '0');
+      const s = String(displaySec % 60).padStart(2, '0');
+      document.getElementById('main-timer-display').textContent = `${h}:${m}:${s}`;
+    }
+
+    function updateSaveButtonState() {
+      const saveBtn = document.getElementById('btn-timer-save');
+      const elapsed = appState.timerMode === 'stopwatch' ? timerSeconds : (targetCountdownSec - timerSeconds);
+      if (elapsed > 0) {
+        saveBtn.disabled = false;
+        saveBtn.classList.replace('bg-emerald-600/50', 'bg-emerald-600');
+        saveBtn.classList.replace('text-slate-400', 'text-white');
+        saveBtn.classList.replace('cursor-not-allowed', 'hover:bg-emerald-500');
+      } else {
+        saveBtn.disabled = true;
+        saveBtn.classList.replace('bg-emerald-600', 'bg-emerald-600/50');
+        saveBtn.classList.replace('text-white', 'text-slate-400');
+        saveBtn.classList.add('cursor-not-allowed');
+      }
+    }
+
+    function saveTimerLog() {
+      const durationSec = appState.timerMode === 'stopwatch' ? timerSeconds : (targetCountdownSec - timerSeconds);
+      if (durationSec <= 0) return;
+
+      const targetId = document.getElementById('timer-target-select').value;
+      const category = document.getElementById('timer-category-select').value;
+      const now = new Date();
+
+      const newLog = {
+        id: 'log_' + Date.now(),
+        targetId: targetId,
+        category: category,
+        seconds: durationSec,
+        timestamp: now.toISOString()
+      };
+
+      appState.logs.unshift(newLog);
+      saveLocalStorage();
+      renderTargets();
+      renderLogs();
+      resetTimer();
+      alert('学習ログを保存しました！');
+    }
+
+    function handleManualLogSubmit(e) {
+      e.preventDefault();
+      const dateVal = document.getElementById('manual-date-input').value;
+      const targetId = document.getElementById('manual-target-select').value;
+      const category = document.getElementById('manual-category-select').value;
+      const hrs = parseInt(document.getElementById('manual-hours-input').value) || 0;
+      const mins = parseInt(document.getElementById('manual-mins-input').value) || 0;
+
+      const totalSec = (hrs * 3600) + (mins * 60);
+      if (totalSec <= 0) {
+        alert('時間を1分以上指定してください。');
+        return;
+      }
+
+      const newLog = {
+        id: 'log_' + Date.now(),
+        targetId: targetId,
+        category: category,
+        seconds: totalSec,
+        timestamp: dateVal ? new Date(dateVal).toISOString() : new Date().toISOString()
+      };
+
+      appState.logs.unshift(newLog);
+      saveLocalStorage();
+      renderTargets();
+      renderLogs();
+      alert('手動ログを追加しました！');
+    }
+
+    function populateTargetDropdowns() {
+      const timerSelect = document.getElementById('timer-target-select');
+      const manualSelect = document.getElementById('manual-target-select');
+
+      let options = '<option value="">(未分類 / 一般学習)</option>';
+      appState.targets.forEach(t => {
+        options += `<option value="${t.id}">${t.name}</option>`;
+      });
+
+      if (timerSelect) timerSelect.innerHTML = options;
+      if (manualSelect) manualSelect.innerHTML = options;
+    }
+
+    function openTargetModal(targetId = null) {
+      const modal = document.getElementById('modal-target');
+      const titleText = document.getElementById('modal-target-title-text');
+      const form = document.getElementById('target-form');
+      form.reset();
+
+      if (targetId) {
+        const t = appState.targets.find(x => x.id === targetId);
+        if (t) {
+          titleText.textContent = '学習目標の編集';
+          document.getElementById('target-edit-id').value = t.id;
+          document.getElementById('target-name-input').value = t.name;
+          document.getElementById('target-hours-input').value = t.targetHours;
+          document.getElementById('target-date-input').value = t.examDate || '';
+          document.getElementById('target-color-input').value = t.color || '#6366f1';
+        }
+      } else {
+        titleText.textContent = '新規学習目標の作成';
+        document.getElementById('target-edit-id').value = '';
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function closeTargetModal() {
+      document.getElementById('modal-target').classList.add('hidden');
+    }
+
+    function handleTargetFormSubmit(e) {
+      e.preventDefault();
+      const editId = document.getElementById('target-edit-id').value;
+      const name = document.getElementById('target-name-input').value;
+      const hours = parseInt(document.getElementById('target-hours-input').value) || 10;
+      const examDate = document.getElementById('target-date-input').value;
+      const color = document.getElementById('target-color-input').value;
+
+      if (editId) {
+        const t = appState.targets.find(x => x.id === editId);
+        if (t) {
+          t.name = name;
+          t.targetHours = hours;
+          t.examDate = examDate;
+          t.color = color;
+        }
+      } else {
+        appState.targets.push({
+          id: 't_' + Date.now(),
+          name: name,
+          targetHours: hours,
+          examDate: examDate,
+          color: color
+        });
+      }
+
+      saveLocalStorage();
+      populateTargetDropdowns();
+      renderTargets();
+      closeTargetModal();
+    }
+
+    function deleteTarget(targetId) {
+      if (confirm('この目標を削除してもよろしいですか？（ログ自体は保持されます）')) {
+        appState.targets = appState.targets.filter(t => t.id !== targetId);
+        saveLocalStorage();
+        populateTargetDropdowns();
+        renderTargets();
+      }
+    }
+
+    function renderTargets() {
+      const grid = document.getElementById('target-card-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      appState.targets.forEach(target => {
+        const logsForTarget = appState.logs.filter(l => l.targetId === target.id);
+        const totalSec = logsForTarget.reduce((acc, curr) => acc + curr.seconds, 0);
+        const doneHours = totalSec / 3600;
+        const percent = Math.min(100, Math.round((doneHours / target.targetHours) * 100));
+        const daysLeft = getDaysUntil(target.examDate);
+
+        const card = document.createElement('div');
+        card.className = 'bg-slate-900/80 border border-slate-800 rounded-2xl p-5 relative overflow-hidden space-y-3';
+        card.style.borderLeft = `4px solid ${target.color || '#6366f1'}`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                ${target.name}
+              </h3>
+              ${target.examDate ? `<p class="text-[10px] text-slate-400 mt-0.5">試験日: ${target.examDate}</p>` : ''}
+            </div>
+            <div class="flex items-center gap-1">
+              ${daysLeft !== null ? `<span class="text-[10px] px-2 py-0.5 bg-indigo-950 text-indigo-300 border border-indigo-800/50 rounded-md font-mono">試験まであと ${daysLeft}日</span>` : ''}
+              <button onclick="openTargetModal('${target.id}')" class="p-1 text-slate-500 hover:text-slate-300 text-xs"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="deleteTarget('${target.id}')" class="p-1 text-slate-500 hover:text-rose-400 text-xs"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">進捗率</span>
+              <span class="font-mono font-bold text-slate-200">${formatHoursMinutes(totalSec)} / ${target.targetHours}時間 (${percent}%)</span>
+            </div>
+            <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+              <div class="h-full rounded-full transition-all duration-500" style="width: ${percent}%; background-color: ${target.color || '#6366f1'};"></div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function setLogPeriod(period) {
+      appState.logPeriod = period;
+      saveLocalStorage();
+
+      ['day', 'week', 'month', 'year', 'all'].forEach(p => {
+        const btn = document.getElementById(`period-btn-${p}`);
+        if (!btn) return;
+        if (p === period) {
+          btn.classList.add('bg-indigo-600', 'text-white');
+          btn.classList.remove('text-slate-400');
+        } else {
+          btn.classList.remove('bg-indigo-600', 'text-white');
+          btn.classList.add('text-slate-400');
+        }
+      });
+
+      renderLogs();
+    }
+
+    function filterLogsByPeriod(logs, period) {
+      if (period === 'all') return logs;
+      
+      const now = new Date();
+      return logs.filter(log => {
+        const logDate = new Date(log.timestamp);
+        if (isNaN(logDate.getTime())) return false;
+
+        if (period === 'day') {
+          return logDate.toDateString() === now.toDateString();
+        } else if (period === 'week') {
+          const startOfWeek = new Date(now);
+          const day = now.getDay();
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+          startOfWeek.setDate(diff);
+          startOfWeek.setHours(0, 0, 0, 0);
+          return logDate >= startOfWeek;
+        } else if (period === 'month') {
+          return logDate.getFullYear() === now.getFullYear() && logDate.getMonth() === now.getMonth();
+        } else if (period === 'year') {
+          return logDate.getFullYear() === now.getFullYear();
+        }
+        return true;
+      });
+    }
+
+    function generateBarChartData(logs, period) {
+      const now = new Date();
+      let buckets = [];
+
+      if (period === 'day') {
+        // Last 7 days
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(d.getDate() - i);
+          const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
+          const isToday = i === 0;
+          buckets.push({
+            label: isToday ? '今日' : dateStr,
+            seconds: 0,
+            matcher: (logDate) => logDate.toDateString() === d.toDateString(),
+            isHighlight: isToday
+          });
+        }
+      } else if (period === 'week') {
+        // Last 4 weeks
+        for (let i = 3; i >= 0; i--) {
+          const wStart = new Date(now);
+          const day = now.getDay();
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1) - (i * 7);
+          wStart.setDate(diff);
+          wStart.setHours(0, 0, 0, 0);
+
+          const wEnd = new Date(wStart);
+          wEnd.setDate(wEnd.getDate() + 6);
+          wEnd.setHours(23, 59, 59, 999);
+
+          const label = i === 0 ? '今週' : `${i}週前`;
+          buckets.push({
+            label: label,
+            seconds: 0,
+            matcher: (logDate) => logDate >= wStart && logDate <= wEnd,
+            isHighlight: i === 0
+          });
+        }
+      } else if (period === 'month') {
+        // Last 6 months
+        for (let i = 5; i >= 0; i--) {
+          const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const label = i === 0 ? '今月' : `${m.getMonth() + 1}月`;
+          buckets.push({
+            label: label,
+            seconds: 0,
+            matcher: (logDate) => logDate.getFullYear() === m.getFullYear() && logDate.getMonth() === m.getMonth(),
+            isHighlight: i === 0
+          });
+        }
+      } else if (period === 'year') {
+        // Last 3 years
+        for (let i = 2; i >= 0; i--) {
+          const y = now.getFullYear() - i;
+          const label = i === 0 ? '今年' : `${y}年`;
+          buckets.push({
+            label: label,
+            seconds: 0,
+            matcher: (logDate) => logDate.getFullYear() === y,
+            isHighlight: i === 0
+          });
+        }
+      } else {
+        // All time fallback: Show 6 monthly buckets
+        for (let i = 5; i >= 0; i--) {
+          const m = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const label = `${m.getMonth() + 1}月`;
+          buckets.push({
+            label: label,
+            seconds: 0,
+            matcher: (logDate) => logDate.getFullYear() === m.getFullYear() && logDate.getMonth() === m.getMonth(),
+            isHighlight: i === 0
+          });
+        }
+      }
+
+      // Fill values
+      logs.forEach(log => {
+        const logDate = new Date(log.timestamp);
+        if (isNaN(logDate.getTime())) return;
+        buckets.forEach(b => {
+          if (b.matcher(logDate)) {
+            b.seconds += log.seconds;
+          }
+        });
+      });
+
+      return buckets;
+    }
+
+    function renderVisualBarChart(period, filteredLogs) {
+      const container = document.getElementById('visual-bar-chart');
+      const titleEl = document.getElementById('chart-period-title');
+      const badgeEl = document.getElementById('motivational-badge');
+      if (!container) return;
+
+      const periodTitles = { day: '直近7日間の推移', week: '直近4週間の推移', month: '直近6ヶ月の推移', year: '直近3年の推移', all: '月別推移' };
+      if (titleEl) titleEl.textContent = periodTitles[period] || '推移';
+
+      const chartData = generateBarChartData(appState.logs, period);
+      const maxSeconds = Math.max(...chartData.map(d => d.seconds), 1); // Avoid div by 0
+
+      // Dynamic Motivational Badge Text
+      const currentPeriodTotalSec = filteredLogs.reduce((acc, curr) => acc + curr.seconds, 0);
+      if (currentPeriodTotalSec === 0) {
+        badgeEl.innerHTML = '<i class="fa-solid fa-seedling text-amber-400"></i> 一歩目を踏み出そう！';
+      } else if (currentPeriodTotalSec >= 3600 * 5) {
+        badgeEl.innerHTML = '<i class="fa-solid fa-trophy text-amber-400"></i> 素晴らしい集中力！';
+      } else {
+        badgeEl.innerHTML = '<i class="fa-solid fa-fire text-indigo-400"></i> ナイス積み上げ！';
+      }
+
+      container.innerHTML = '';
+      chartData.forEach(item => {
+        const heightPercent = item.seconds > 0 ? Math.max(12, Math.round((item.seconds / maxSeconds) * 100)) : 6;
+        const timeFormatted = item.seconds > 0 ? formatHoursMinutes(item.seconds) : '0分';
+
+        const col = document.createElement('div');
+        col.className = 'flex-1 flex flex-col items-center h-full justify-end group cursor-pointer relative';
+
+        const barBg = item.isHighlight 
+          ? 'bg-gradient-to-t from-indigo-600 to-indigo-400 group-hover:from-indigo-500 group-hover:to-indigo-300 shadow-lg shadow-indigo-500/20' 
+          : 'bg-slate-800 group-hover:bg-slate-700';
+
+        col.innerHTML = `
+          <!-- Tooltip on Hover -->
+          <div class="opacity-0 group-hover:opacity-100 transition pointer-events-none absolute -top-8 bg-slate-950 border border-slate-700 text-slate-200 text-[10px] font-mono px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-20">
+            ${item.label}: ${timeFormatted}
+          </div>
+
+          <!-- Time value label above bar -->
+          <span class="text-[9px] font-mono text-slate-400 mb-1 group-hover:text-indigo-300 transition">${item.seconds > 0 ? (item.seconds >= 3600 ? Math.round(item.seconds/3600)+'h' : Math.round(item.seconds/60)+'m') : ''}</span>
+
+          <!-- Animated Bar Container -->
+          <div class="w-full max-w-[36px] bg-slate-950/50 rounded-t-lg overflow-hidden flex items-end h-full">
+            <div class="w-full rounded-t-lg transition-all duration-500 ${barBg}" style="height: ${heightPercent}%;"></div>
+          </div>
+
+          <!-- X Axis Label -->
+          <span class="text-[10px] font-medium text-slate-400 mt-2 ${item.isHighlight ? 'text-indigo-400 font-bold' : ''}">${item.label}</span>
+        `;
+        container.appendChild(col);
+      });
+    }
+
+    function renderLogs() {
+      const tbody = document.getElementById('logs-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      const period = appState.logPeriod || 'day';
+      const periodLabels = { day: '本日', week: '今週', month: '今月', year: '今年', all: '全期間' };
+      const periodLabelEl = document.getElementById('log-period-label');
+      if (periodLabelEl) periodLabelEl.textContent = periodLabels[period] || '全期間';
+
+      const filteredLogs = filterLogsByPeriod(appState.logs, period);
+
+      const overallSec = filteredLogs.reduce((acc, curr) => acc + curr.seconds, 0);
+      document.getElementById('overall-total-time').textContent = `合計 (${periodLabels[period]}): ${formatHoursMinutes(overallSec)}`;
+
+      // Render Visual Bar Chart
+      renderVisualBarChart(period, filteredLogs);
+
+      // Category Breakdown
+      const catTotals = {};
+      filteredLogs.forEach(l => {
+        const cat = l.category || '未分類';
+        catTotals[cat] = (catTotals[cat] || 0) + l.seconds;
+      });
+
+      const catContainer = document.getElementById('category-breakdown-container');
+      catContainer.innerHTML = '';
+      if (Object.keys(catTotals).length === 0) {
+        catContainer.innerHTML = '<p class="text-xs text-slate-500 py-2">この期間のデータはありません。</p>';
+      } else {
+        Object.entries(catTotals).forEach(([cat, sec]) => {
+          const catPercent = overallSec > 0 ? Math.round((sec / overallSec) * 100) : 0;
+          const row = document.createElement('div');
+          row.className = 'text-xs space-y-1';
+          row.innerHTML = `
+            <div class="flex justify-between text-slate-300">
+              <span>${cat}</span>
+              <span class="font-mono">${formatHoursMinutes(sec)} (${catPercent}%)</span>
+            </div>
+            <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+              <div class="bg-indigo-500 h-full rounded-full" style="width: ${catPercent}%"></div>
+            </div>
+          `;
+          catContainer.appendChild(row);
+        });
+      }
+
+      // Table rows (latest 50 of filtered)
+      if (filteredLogs.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="5" class="py-6 text-center text-slate-500">選択した期間の学習ログが存在しません。</td>`;
+        tbody.appendChild(tr);
+      } else {
+        filteredLogs.slice(0, 50).forEach(log => {
+          const target = appState.targets.find(t => t.id === log.targetId);
+          const dateObj = new Date(log.timestamp);
+          const dateStr = `${dateObj.getFullYear()}/${dateObj.getMonth()+1}/${dateObj.getDate()} ${String(dateObj.getHours()).padStart(2,'0')}:${String(dateObj.getMinutes()).padStart(2,'0')}`;
+
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-900/40 transition';
+          tr.innerHTML = `
+            <td class="py-2.5 px-4 font-mono text-slate-400">${dateStr}</td>
+            <td class="py-2.5 px-4">${target ? `<span class="px-2 py-0.5 rounded text-[10px] font-medium" style="background-color: ${target.color}20; color:${target.color}; border: 1px solid ${target.color}40;">${target.name}</span>` : '<span class="text-slate-500">-</span>'}</td>
+            <td class="py-2.5 px-4 text-slate-300">${log.category || '-'}</td>
+            <td class="py-2.5 px-4 font-mono font-bold text-indigo-400">${formatHoursMinutes(log.seconds)}</td>
+            <td class="py-2.5 px-4 text-right">
+              <button onclick="deleteLog('${log.id}')" class="text-slate-500 hover:text-rose-400"><i class="fa-solid fa-trash"></i></button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    }
+
+    function deleteLog(logId) {
+      appState.logs = appState.logs.filter(l => l.id !== logId);
+      saveLocalStorage();
+      renderTargets();
+      renderLogs();
+    }
+
+    function clearAllLogs() {
+      if (confirm('すべての学習ログを消去しますか？この操作は取り消せません。')) {
+        appState.logs = [];
+        saveLocalStorage();
+        renderTargets();
+        renderLogs();
+      }
+    }
+
+    function openSyncModal() {
+      const modal = document.getElementById('modal-sync');
+      const textarea = document.getElementById('sync-json-text');
+      textarea.value = JSON.stringify(appState, null, 2);
+      modal.classList.remove('hidden');
+    }
+
+    function closeSyncModal() {
+      document.getElementById('modal-sync').classList.add('hidden');
+    }
+
+    function copySyncData() {
+      const textarea = document.getElementById('sync-json-text');
+      textarea.select();
+      navigator.clipboard.writeText(textarea.value);
+      alert('バックアップデータをクリップボードにコピーしました！');
+    }
+
+    function importSyncData() {
+      const textarea = document.getElementById('sync-json-text');
+      try {
+        const parsed = JSON.parse(textarea.value);
+        if (parsed && typeof parsed === 'object') {
+          appState = { ...appState, ...parsed };
+          saveLocalStorage();
+          populateTargetDropdowns();
+          renderTargets();
+          renderLogs();
+          closeSyncModal();
+          alert('データを正常に復元・インポートしました！');
+        }
+      } catch (e) {
+        alert('JSONフォーマットが正しくありません。確認の上再度お試しください。');
+      }
+    }
+  </script>
+</body>
+</html>
